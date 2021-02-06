@@ -3,10 +3,38 @@
 from my_token_vk import token
 from vk_api import bot_longpoll  # Without this method does not see the class VkBotLongPoll
 import vk_api
+import logging
 
 group_id = 202361699
 users_info = {}  # user_id : random_id
 count_users = 0
+
+log = logging.getLogger('bot')  # create main logging object
+
+
+def configure_logging():
+    stream_handler = logging.StreamHandler()  # analogue  print
+    stream_handler.setLevel(logging.DEBUG)  # create record lvl-DEBUG
+    stream_handler.setFormatter(logging.Formatter('%(levelname)s '   # define the format for output message
+                                                  '%(message)s'))
+
+    file_handler = logging.FileHandler('/home/dmitrii/Project/VK/log/log_file')  # writes to file
+    file_handler.setLevel(logging.DEBUG)  # create record lvl-DEBUG
+    file_handler.setFormatter(logging.Formatter('%(asctime)s '   # define the format for output message
+                                                '%(levelname)s ' 
+                                                '%(message)s'))
+    log.addHandler(stream_handler)
+    log.addHandler(file_handler)
+    log.setLevel(logging.DEBUG)  # all log set lvl-DEBUG (view all lvl? because DEBUG is low-lvl
+
+
+'lvl logging'
+'NONSET'
+'DEBUG'
+'INFO - '
+'WARNING'  # sms low-level don't send to log (such as INFO, DEBUG)
+'ERROR'
+'CRITICAL'
 
 
 class Bot:
@@ -20,11 +48,10 @@ class Bot:
 
     def run(self):
         for event in self.long_poller.listen():
-            print('Получено событие')
             try:
                 self.on_event(event)
-            except Exception as err:
-                print(err)
+            except Exception:
+                log.exception('Ошибка в обратботке события')  # method of log, can view exception (as print err)
 
     def on_event(self, event):
         global users_info  # user_id : random_id
@@ -36,14 +63,16 @@ class Bot:
             if user_id not in users_info.keys():
                 count_users += 1
                 users_info.setdefault(user_id, count_users)
+            log.debug('Отправляем сообщение назад')
             self.api.messages.send(message='auto answer',
                                    user_id=user_id,
                                    random_id=event.object.message.get('id'),  # needed for safety
                                    peer_id=user_id, )
         else:
-            print(f'Получено новое событие типа{event.type}')
+            log.info(f'Получено новое событие типа {event.type}')
 
 
 if __name__ == '__main__':
+    configure_logging()
     bot = Bot(group_id, token)
     bot.run()
