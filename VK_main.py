@@ -1,4 +1,7 @@
 #!~/Project/VK/venv python 3
+"""
+my VK bot_group
+"""
 
 from my_token_vk import token
 from vk_api import bot_longpoll  # Without this method does not see the class VkBotLongPoll
@@ -13,6 +16,10 @@ log = logging.getLogger('bot')  # create main logging object
 
 
 def configure_logging():
+    """
+    logging settings
+    :return: None
+    """
     stream_handler = logging.StreamHandler()  # analogue  print
     stream_handler.setLevel(logging.DEBUG)  # create record lvl-DEBUG
     stream_handler.setFormatter(logging.Formatter('%(levelname)s '   # define the format for output message
@@ -38,7 +45,16 @@ def configure_logging():
 
 
 class Bot:
+    """
+
+    Use Python3.9
+    """
     def __init__(self, group_id, token):  # create attributes
+        """
+
+        :param group_id:  group id VK
+        :param token:  secret token
+        """
         self.group_id = group_id
         self.token = token
 
@@ -47,13 +63,23 @@ class Bot:
         self.long_poller = vk_api.bot_longpoll.VkBotLongPoll(self.vk, self.group_id)  # Create BotLongPoller
 
     def run(self):
+        """
+
+        start program
+        """
         for event in self.long_poller.listen():
             try:
                 self.on_event(event)
             except Exception:
                 log.exception('Ошибка в обратботке события')  # method of log, can view exception (as print err)
 
-    def on_event(self, event):
+    def on_event(self, event: vk_api.bot_longpoll.VkBotEventType):
+        """
+        replies to text message
+
+        :param event: VkBotMessageEvent object
+        :return: None
+        """
         global users_info  # user_id : random_id
         global count_users
 
