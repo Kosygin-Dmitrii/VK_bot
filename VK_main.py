@@ -2,7 +2,8 @@
 """
 my VK bot_group
 """
-
+import handlers
+import settings
 from my_token_vk import token
 from vk_api import bot_longpoll  # Without this method does not see the class VkBotLongPoll
 import vk_api
@@ -43,6 +44,16 @@ def configure_logging():
 'ERROR'
 'CRITICAL'
 
+class UserState:
+    """
+    user states inside the scenario
+    """
+    def __init__(self, scenario_name, step_name, context = None):
+        self.scenario_name = scenario_name
+        self.step_name = step_name
+        self.context = context or {}
+
+
 
 class Bot:
     """
@@ -61,6 +72,9 @@ class Bot:
         self.vk = vk_api.VkApi(token=token)  # Main class of library
         self.api = self.vk.get_api()  # This method allows you to refer to VK methods
         self.long_poller = vk_api.bot_longpoll.VkBotLongPoll(self.vk, self.group_id)  # Create BotLongPoller
+
+        self.user_states = dict()  # user_id --> UserState - step on script
+        # Находясь на этапе сценария спрашиваем не хочет ли он начать другой, и храним его в этом сценарии
 
     def run(self):
         """
@@ -83,19 +97,68 @@ class Bot:
         global users_info  # user_id : random_id
         global count_users
 
-        if event.type == vk_api.bot_longpoll.VkBotEventType.MESSAGE_NEW:  # actions on message receiving event
-            print(event.object.message.get('text'))
-            user_id = event.object.message.get('from_id')  # user ID who sent the message
-            if user_id not in users_info.keys():
-                count_users += 1
-                users_info.setdefault(user_id, count_users)
-            log.debug('Отправляем сообщение назад')
-            self.api.messages.send(message='auto answer',
-                                   user_id=user_id,
-                                   random_id=event.object.message.get('id'),  # needed for safety
-                                   peer_id=user_id, )
-        else:
+        if event.type != vk_api.bot_longpoll.VkBotEventType.MESSAGE_NEW:  # actions on message receiving event
             log.info(f'Получено новое событие типа {event.type}')
+            return  # Выбрасывает из функции евент, иначе идет дальше по тексту и вызывает ошибки
+        user_id = event.object.message.get('from_id')  # user ID who sent the message
+        user_text = event.object.message.get('text')
+        if user_id not in users_info.keys():
+            count_users += 1
+            users_info.setdefault(user_id, count_users)
+        # log.debug('Отправляем сообщение назад')
+
+
+        if user_id in self.user_states:
+            text_to_send = self.continue_scenario(user_id, text=user_text)
+        else:
+            # search intent
+            for intent in settings.INTENTS:
+                log.debug(f'User gets {intent}')
+                if any(token in event.object.message.get('text') for token in intent['tokens']):
+                    # run intent произведем нужные действя и сделаем брейк
+                    if intent['answer']:
+                        text_to_send = intent["answer"]
+                    else:
+                        text_to_send = self.start_scenario(user_id, intent['scenario'])
+                    break
+            else:
+                text_to_send = settings.default_answer
+
+        self.api.messages.send(message=text_to_send,
+                               user_id=user_id,
+                               random_id=event.object.message.get('id'),  # needed for safety
+                               peer_id=user_id, )
+
+    def start_scenario(self, user_id, scenario_name):
+        scenario = settings.scenarios[scenario_name]
+        first_step = scenario['first_step']
+        step = scenario['steps'][first_step]
+        text_to_send = step['text']
+        self.user_states[user_id] = UserState(scenario_name=scenario_name, step_name=first_step)
+        return text_to_send
+
+    def continue_scenario(self, user_id, text):
+        state = self.user_states[user_id]
+        steps = settings.scenarios[state.scenario_name]["steps"]
+        step = settings.scenarios[state.scenario_name]["steps"][state.step_name]
+
+        handler = getattr(handlers, step['handler'])  # ищет в модуле определенную функцию
+        if handler(text=text, context=state.context):
+            # next step
+            next_step = steps[step['next_step']]
+            text_to_send = next_step['text'].format(**state.context)  # text для отправки
+            if next_step["next_step"]:
+                # switch to next step
+                state.step_name = step['next_step']
+            else:
+                # finish scenario
+                self.user_states.pop(user_id)
+                log.info('Зарегистрирован: {name} {email}'.format(**state.context))
+        else:
+            # retry current step
+            text_to_send = step['failure_text'].format(**state.context)
+
+        return text_to_send
 
 
 if __name__ == '__main__':
