@@ -51,7 +51,7 @@ class UserState:
     def __init__(self, scenario_name, step_name, context = None):
         self.scenario_name = scenario_name
         self.step_name = step_name
-        self.context = context or {}
+        self.context = context or {}  # context is defined in handlers.py
 
 
 
@@ -107,21 +107,20 @@ class Bot:
             users_info.setdefault(user_id, count_users)
         # log.debug('Отправляем сообщение назад')
 
-
-        if user_id in self.user_states:
-            text_to_send = self.continue_scenario(user_id, text=user_text)
+        if user_id in self.user_states:  # checking if the user is in the scenario
+            text_to_send = self.continue_scenario(user_id, text=user_text)  # use func continue_scenario and return txt
         else:
             # search intent
-            for intent in settings.INTENTS:
+            for intent in settings.INTENTS:  # looking for a match user_txt in every intention
                 log.debug(f'User gets {intent}')
-                if any(token in event.object.message.get('text') for token in intent['tokens']):
-                    # run intent произведем нужные действя и сделаем брейк
-                    if intent['answer']:
+                if any(token in user_text for token in intent['tokens']):  # looking for a token match in user_txt
+                    # run intent and output the answer
+                    if intent['answer']:  # if there is an answer, display the answer
                         text_to_send = intent["answer"]
-                    else:
-                        text_to_send = self.start_scenario(user_id, intent['scenario'])
-                    break
-            else:
+                    else:  # if there is no answer, start the scenario
+                        text_to_send = self.start_scenario(user_id, intent['scenario'])  # user_id and name of scenario
+                    break  # exit loop
+            else:  # unexpected user_txt
                 text_to_send = settings.default_answer
 
         self.api.messages.send(message=text_to_send,
@@ -130,31 +129,43 @@ class Bot:
                                peer_id=user_id, )
 
     def start_scenario(self, user_id, scenario_name):
-        scenario = settings.scenarios[scenario_name]
-        first_step = scenario['first_step']
-        step = scenario['steps'][first_step]
-        text_to_send = step['text']
-        self.user_states[user_id] = UserState(scenario_name=scenario_name, step_name=first_step)
-        return text_to_send
+        """
+        start scenario
+        :param user_id: user id
+        :param scenario_name: scenario name
+        :return: text to send (bot_answer)
+        """
+        scenario = settings.scenarios[scenario_name]  # enter scenario.name (example: scenario.registration)
+        first_step = scenario['first_step']  # init first step
+        step = scenario['steps'][first_step]  # init current step
+        text_to_send = step['text']  # current step text
+        self.user_states[user_id] = UserState(scenario_name=scenario_name, step_name=first_step)  # create dict (user_id : UserState)
+        return text_to_send  # returns the text_to_send of the first step
 
     def continue_scenario(self, user_id, text):
-        state = self.user_states[user_id]
-        steps = settings.scenarios[state.scenario_name]["steps"]
-        step = settings.scenarios[state.scenario_name]["steps"][state.step_name]
+        """
+        moves in steps
+        :param user_id: user id
+        :param text: user_text
+        :return: text to send (bot_answer)
+        """
+        state = self.user_states[user_id]  # current state of user (cls UserState)
+        steps = settings.scenarios[state.scenario_name]["steps"]  # dict of all steps
+        step = settings.scenarios[state.scenario_name]["steps"][state.step_name]  # current step (in settings)
 
-        handler = getattr(handlers, step['handler'])  # ищет в модуле определенную функцию
-        if handler(text=text, context=state.context):
+        handler = getattr(handlers, step['handler'])  # Returns handler for the current step getattr(obj,name_attr)
+        if handler(text=text, context=state.context):  # if the data is entered correctly
             # next step
-            next_step = steps[step['next_step']]
-            text_to_send = next_step['text'].format(**state.context)  # text для отправки
-            if next_step["next_step"]:
+            next_step = steps[step['next_step']]  # in the current step choose next_step
+            text_to_send = next_step['text'].format(**state.context)  # text to send (bot_answer) context is defined in handlers.py
+            if next_step["next_step"]:  # if there is a next step
                 # switch to next step
-                state.step_name = step['next_step']
-            else:
+                state.step_name = step['next_step']  # redefine the current step to the next
+            else:  # if there is not a next step
                 # finish scenario
-                self.user_states.pop(user_id)
+                self.user_states.pop(user_id)  # remove the user from the scenario
                 log.info('Зарегистрирован: {name} {email}'.format(**state.context))
-        else:
+        else:  # if the data is entered incorrectly
             # retry current step
             text_to_send = step['failure_text'].format(**state.context)
 
