@@ -17,7 +17,7 @@ def handle_name(text, context):
     """
     match = re.match(pattern_re_name,  text)  # сравниваем введенный текст с шаблоном имени
     if match:
-        context['name'] = text
+        context['name'] = text  # create (context == {'name': 'Dima'} )
         return True
     else:
         return False

@@ -2,8 +2,11 @@
 """
 my VK bot_group
 """
+from pony.orm import db_session
+
 import handlers
 import settings
+from models import UserState
 from my_token_vk import token
 from vk_api import bot_longpoll  # Without this method does not see the class VkBotLongPoll
 import vk_api
@@ -44,16 +47,6 @@ def configure_logging():
 'ERROR'
 'CRITICAL'
 
-class UserState:
-    """
-    user states inside the scenario
-    """
-    def __init__(self, scenario_name, step_name, context = None):
-        self.scenario_name = scenario_name
-        self.step_name = step_name
-        self.context = context or {}  # context is defined in handlers.py
-
-
 
 class Bot:
     """
@@ -73,7 +66,6 @@ class Bot:
         self.api = self.vk.get_api()  # This method allows you to refer to VK methods
         self.long_poller = vk_api.bot_longpoll.VkBotLongPoll(self.vk, self.group_id)  # Create BotLongPoller
 
-        self.user_states = dict()  # user_id --> UserState - step on script
         # Находясь на этапе сценария спрашиваем не хочет ли он начать другой, и храним его в этом сценарии
 
     def run(self):
@@ -86,7 +78,7 @@ class Bot:
                 self.on_event(event)
             except Exception:
                 log.exception('Ошибка в обратботке события')  # method of log, can view exception (as print err)
-
+    @db_session  # decorator save changes in db automaticly ( вместо commit()- сохр. изменения вручную)
     def on_event(self, event: vk_api.bot_longpoll.VkBotEventType):
         """
         replies to text message
@@ -107,13 +99,16 @@ class Bot:
             users_info.setdefault(user_id, count_users)
         # log.debug('Отправляем сообщение назад')
 
-        if user_id in self.user_states:  # checking if the user is in the scenario
-            text_to_send = self.continue_scenario(user_id, text=user_text)  # use func continue_scenario and return txt
+        # state узнать из UserState по user_id через pony ORM
+        state = UserState.get(user_id=str(user_id))  # pony method  Getting one object by unique combination of attributes
+
+        if state is not None:  # checking if the user is in the scenario
+            text_to_send = self.continue_scenario(text=user_text, state=state )  # use func continue_scenario and return txt  # add state to atr
         else:
             # search intent
             for intent in settings.INTENTS:  # looking for a match user_txt in every intention
                 log.debug(f'User gets {intent}')
-                if any(token in user_text for token in intent['tokens']):  # looking for a token match in user_txt
+                if any(token in user_text.lower() for token in intent['tokens']):  # looking for a token match in user_txt
                     # run intent and output the answer
                     if intent['answer']:  # if there is an answer, display the answer
                         text_to_send = intent["answer"]
@@ -139,17 +134,16 @@ class Bot:
         first_step = scenario['first_step']  # init first step
         step = scenario['steps'][first_step]  # init current step
         text_to_send = step['text']  # current step text
-        self.user_states[user_id] = UserState(scenario_name=scenario_name, step_name=first_step)  # create dict (user_id : UserState)
+        UserState(user_id=str(user_id), scenario_name=scenario_name, step_name=first_step, context={}) #!!! table
         return text_to_send  # returns the text_to_send of the first step
 
-    def continue_scenario(self, user_id, text):
+    def continue_scenario(self, text, state):  # add state to atr
         """
         moves in steps
         :param user_id: user id
         :param text: user_text
         :return: text to send (bot_answer)
         """
-        state = self.user_states[user_id]  # current state of user (cls UserState)
         steps = settings.scenarios[state.scenario_name]["steps"]  # dict of all steps
         step = settings.scenarios[state.scenario_name]["steps"][state.step_name]  # current step (in settings)
 
@@ -163,7 +157,7 @@ class Bot:
                 state.step_name = step['next_step']  # redefine the current step to the next
             else:  # if there is not a next step
                 # finish scenario
-                self.user_states.pop(user_id)  # remove the user from the scenario
+                state.delete() # remove the user from the scenario  # delete from sql
                 log.info('Зарегистрирован: {name} {email}'.format(**state.context))
         else:  # if the data is entered incorrectly
             # retry current step

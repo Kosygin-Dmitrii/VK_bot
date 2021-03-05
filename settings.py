@@ -6,6 +6,8 @@
 
 
 # Намерения
+from my_token_vk import passw
+
 INTENTS = [
     {
         'name': 'Дата проведения',
@@ -59,3 +61,10 @@ scenarios = {
 default_answer = 'Ну что за непотребства ты тут пишешь!' \
                 'Могу сказать где и когда пройдет событие! Спроси лучше об этом.' \
                  'Также могу зарегистрировать'
+
+
+
+
+#create user db_dmitrii with password *****;
+#GRANT ALL PRIVILEGES ON DATABASE "vk_chat_bot" to db_dmitrii;
+DB_CONFIG = dict(provider='postgres', user='db_dmitrii', password=passw,host='localhost',database='vk_chat_bot')
