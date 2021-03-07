@@ -50,6 +50,7 @@ scenarios = {
             },
             'step3': {
                 "text": "Спасибо за регистрацию, {name}! Мы уже взламываем ваш {email}, удачи!",
+                "image": "handle_generate_picture",
                 'failure_text': None,
                 "handler": None,
                 "next_step": None

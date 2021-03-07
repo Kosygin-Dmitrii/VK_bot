@@ -44,7 +44,7 @@ def generate_picture(name, email):  # name - user name
 
 
 
-generate_picture('Dima', 'asd.ru')
+
 
 
 

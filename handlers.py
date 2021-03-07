@@ -5,6 +5,8 @@ True если шаг пройден, False - если введены непра�
 
 import re
 
+from generate_picture import generate_picture
+
 pattern_re_name = r'^[\w\s \-]{3,40}$' # ^ - начало строки, $ - конец строки , w - буквы, s - пробел
 pattern_re_email = r"(\b^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b)" # ctrl+V google  \b...\b позволяет отделить конструкцию в контексте
 
@@ -29,5 +31,8 @@ def handle_email(text, context):
         return True
     else:
         return False
+
+def handle_generate_picture(text, context):  # call generate_picture
+    return generate_picture(name=context['name'], email=context['email'])
 
 

@@ -2,6 +2,7 @@
 """
 my VK bot_group
 """
+from random import randint
 from pony.orm import db_session
 
 import handlers
@@ -103,7 +104,7 @@ class Bot:
         state = UserState.get(user_id=str(user_id))  # pony method  Getting one object by unique combination of attributes
 
         if state is not None:  # checking if the user is in the scenario
-            text_to_send = self.continue_scenario(text=user_text, state=state )  # use func continue_scenario and return txt  # add state to atr
+            self.continue_scenario(text=user_text, state=state, user_id=user_id)  # use func continue_scenario and return txt  # add state to atr
         else:
             # search intent
             for intent in settings.INTENTS:  # looking for a match user_txt in every intention
@@ -111,19 +112,32 @@ class Bot:
                 if any(token in user_text.lower() for token in intent['tokens']):  # looking for a token match in user_txt
                     # run intent and output the answer
                     if intent['answer']:  # if there is an answer, display the answer
-                        text_to_send = intent["answer"]
+                        self.send_text(intent["answer"], user_id)
                     else:  # if there is no answer, start the scenario
-                        text_to_send = self.start_scenario(user_id, intent['scenario'])  # user_id and name of scenario
+                        self.start_scenario(user_id, intent['scenario'], text=user_text)  # user_id and name of scenario
                     break  # exit loop
             else:  # unexpected user_txt
-                text_to_send = settings.default_answer
+                self.send_text(settings.default_answer,user_id)
 
+    def send_text(self, text_to_send, user_id):  # send answer by ID
         self.api.messages.send(message=text_to_send,
                                user_id=user_id,
-                               random_id=event.object.message.get('id'),  # needed for safety
+                               random_id=randint(0, 2**20),  # needed for safety
                                peer_id=user_id, )
 
-    def start_scenario(self, user_id, scenario_name):
+    def send_image(self, image, user_id):
+        pass #TODO
+
+    def send_step(self, step, user_id, text, context):  # send text and image if they exist
+        if 'text' in step:
+            self.send_text(step['text'].format(**context), user_id)  # current step text
+        if 'image' in step:
+            handler = getattr(handlers, step['image'])  # in current step get "handle_generate_picture"
+            image = handler(text, context) # call generate_picture, return temp_file
+            self.send_image(image, user_id)  # call func send_image
+
+
+    def start_scenario(self, user_id, scenario_name, text):
         """
         start scenario
         :param user_id: user id
@@ -133,11 +147,10 @@ class Bot:
         scenario = settings.scenarios[scenario_name]  # enter scenario.name (example: scenario.registration)
         first_step = scenario['first_step']  # init first step
         step = scenario['steps'][first_step]  # init current step
-        text_to_send = step['text']  # current step text
+        self.send_step(step, user_id, text, context={})  # context={} because it init next row
         UserState(user_id=str(user_id), scenario_name=scenario_name, step_name=first_step, context={}) #!! create table
-        return text_to_send  # returns the text_to_send of the first step
 
-    def continue_scenario(self, text, state):  # add state to atr
+    def continue_scenario(self, text, state, user_id):  # add state to atr
         """
         moves in steps
         :param user_id: user id
@@ -151,7 +164,7 @@ class Bot:
         if handler(text=text, context=state.context):  # if the data is entered correctly
             # next step
             next_step = steps[step['next_step']]  # in the current step choose next_step
-            text_to_send = next_step['text'].format(**state.context)  # text to send (bot_answer) context is defined in handlers.py
+            self.send_step(next_step, user_id, text, state.context)  # text to send (bot_answer) context is defined in handlers.py
             if next_step["next_step"]:  # if there is a next step
                 # switch to next step
                 state.step_name = step['next_step']  # redefine the current step to the next
@@ -162,9 +175,8 @@ class Bot:
                 Registration(name=state.context['name'], email=state.context['email'])  # init table Registration
         else:  # if the data is entered incorrectly
             # retry current step
-            text_to_send = step['failure_text'].format(**state.context)
+            self.send_text(step['failure_text'].format(**state.context), user_id)
 
-        return text_to_send
 
 
 if __name__ == '__main__':
