@@ -13,6 +13,8 @@ from unittest.mock import patch, Mock, ANY
 
 from pony.orm import db_session, rollback
 from vk_api.bot_longpoll import VkBotMessageEvent
+
+from generate_picture import generate_picture
 from VK_main import Bot
 
 #decorator for test db
@@ -79,3 +81,17 @@ class Test1(TestCase):
                                           user_id=self.RAW_EVENT['object']['message']['from_id'],
                                           random_id=ANY,  # принимает любое значение
                                           peer_id=self.RAW_EVENT['object']['message']['peer_id'])
+
+
+    def test_image_generator(self):
+        """
+        Обращается в интернет через requests, можно замокать реквест и возвращать картинку, предварительно скачанную.
+        :return:
+        """
+        pic_file = generate_picture('Dima', 'asd.ru')
+        with open ('example_pic_to_send.png', 'rb') as expected_file:
+            expected_bytes = expected_file.read()
+
+        assert pic_file.read() == expected_bytes  # diff because random background color
+
+
