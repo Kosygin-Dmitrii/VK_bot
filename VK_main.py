@@ -3,6 +3,8 @@
 my VK bot_group
 """
 from random import randint
+
+import requests
 from pony.orm import db_session
 
 import handlers
@@ -79,6 +81,7 @@ class Bot:
                 self.on_event(event)
             except Exception:
                 log.exception('Ошибка в обратботке события')  # method of log, can view exception (as print err)
+
     @db_session  # decorator save changes in db automaticly ( вместо commit()- сохр. изменения вручную)
     def on_event(self, event: vk_api.bot_longpoll.VkBotEventType):
         """
@@ -126,7 +129,29 @@ class Bot:
                                peer_id=user_id, )
 
     def send_image(self, image, user_id):
-        pass #TODO
+        # Нужно найти сервер, куда загрузить фото (upload_url)
+        upload_url = self.api.photos.getMessagesUploadServer()['upload_url']  # return obj (upload_url, album_id, group_id)
+        # send to upload_url file
+        # После успешной загрузки сервер возвращает в ответе JSON-объект с полями server, photo, hash:
+        response = requests.post(url=upload_url, files={'photo': ('image.jpg', image, 'image/jpg')})  # >>JSON (serv, photo, hash)
+        upload_data = response.json() # берем json значения о загруженном изображении
+        # files = {name: file} name work as descriptor, в файл необходимо указать полное название файла, прикрепить сам
+        # файл, указать расширение файла, через спец символ "/", так как вк сам не разбирает что за файл, Нужно вручную
+        # указывать эти данные, что бы он распарсил данные
+
+        # Сохраняет фотографию после успешной загрузки на сервер
+        image_data = self.api.photos.saveMessagesPhoto(**upload_data)  #unpack all kwargs into vk_method
+        # answer is obj - возвращённый объект имеет поля id, pid, aid, owner_id, src, src_big, src_small, created.
+        owner_id = image_data[0]['owner_id']  # нужно взять первый элемент и из него вытащить нужные данные
+        media_id = image_data[0]['id']
+
+        attachment = f'photo{owner_id}_{media_id}'  # <type><owner_id>_<media_id>
+
+        self.api.messages.send(attachment=attachment,  # method send img to user (documentation)
+                               user_id=user_id,
+                               random_id=randint(0, 2 ** 20),  # needed for safety
+                               peer_id=user_id, )
+
 
     def send_step(self, step, user_id, text, context):  # send text and image if they exist
         if 'text' in step:
