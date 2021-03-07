@@ -19,4 +19,15 @@ class UserState(db.Entity):  # Entity - сущность
     context = Required(Json)  # context - dict, because type is Json   # context is defined in handlers.py
     user_id = Required(str, unique=True)  # UNIQUE!
 
-db.generate_mapping(create_tables=True)  # mapping - отображение
+
+class Registration (db.Entity):   # Create table registration
+    """
+    registration application
+    """
+    name = Required(str)
+    email = Required(str)
+
+
+
+db.generate_mapping(create_tables=True)  # mapping - отображение (в самом низу находиться должна запись)
+

@@ -10,8 +10,20 @@ coverage report -m    показывает результаты тестиров
 
 from unittest import TestCase
 from unittest.mock import patch, Mock, ANY
+
+from pony.orm import db_session, rollback
 from vk_api.bot_longpoll import VkBotMessageEvent
 from VK_main import Bot
+
+#decorator for test db
+def isolate_db(test_func):  # На вход функцию, которую будем запускать
+    def wrapper (*args, **kwargs):  # Аргументы передаются в тест. Вернем враппер
+        with db_session:  # Open транзакцию внутри нее происходят процессы, а потом закрываем не сохраняя
+            test_func(*args, **kwargs)  # call func
+            rollback()
+    return wrapper()
+
+
 
 
 class Test1(TestCase):

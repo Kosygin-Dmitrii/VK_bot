@@ -6,6 +6,9 @@ idna==2.10
 isort==5.7.0
 lazy-object-proxy==1.4.3
 mccabe==0.6.1
+pony==0.7.14
+psycopg2==2.8.4
+psycopg2-binary==2.8.6
 pylint==2.6.0
 requests==2.25.1
 six==1.15.0

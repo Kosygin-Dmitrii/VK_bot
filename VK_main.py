@@ -6,7 +6,7 @@ from pony.orm import db_session
 
 import handlers
 import settings
-from models import UserState
+from models import UserState, Registration
 from my_token_vk import token
 from vk_api import bot_longpoll  # Without this method does not see the class VkBotLongPoll
 import vk_api
@@ -134,7 +134,7 @@ class Bot:
         first_step = scenario['first_step']  # init first step
         step = scenario['steps'][first_step]  # init current step
         text_to_send = step['text']  # current step text
-        UserState(user_id=str(user_id), scenario_name=scenario_name, step_name=first_step, context={}) #!!! table
+        UserState(user_id=str(user_id), scenario_name=scenario_name, step_name=first_step, context={}) #!! create table
         return text_to_send  # returns the text_to_send of the first step
 
     def continue_scenario(self, text, state):  # add state to atr
@@ -157,8 +157,9 @@ class Bot:
                 state.step_name = step['next_step']  # redefine the current step to the next
             else:  # if there is not a next step
                 # finish scenario
-                state.delete() # remove the user from the scenario  # delete from sql
                 log.info('Зарегистрирован: {name} {email}'.format(**state.context))
+                state.delete() # remove the user from the scenario  # delete from sql
+                Registration(name=state.context['name'], email=state.context['email'])  # init table Registration
         else:  # if the data is entered incorrectly
             # retry current step
             text_to_send = step['failure_text'].format(**state.context)
